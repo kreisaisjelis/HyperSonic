@@ -273,11 +273,11 @@ class GameState:
         self.my_bombs = self.players[my_id]['bombsAvailable']
         self.my_range = self.players[my_id]['bombRange']
         
-    def ChainBombsInternal(self,field, bombs, items):
+    def ChainBombs(self):
         while True:
-            bombs.sort(key=lambda bomb: bomb['roundsLeft']) # we need this sorted for more efficient chain explosion processing later
+            self.bombs.sort(key=lambda bomb: bomb['roundsLeft']) # we need this sorted for more efficient chain explosion processing later
             haveChaining = False
-            for (bomb1, bomb2) in itertools.combinations(bombs, 2):
+            for (bomb1, bomb2) in itertools.combinations(self.bombs, 2):
                 if bomb1['roundsLeft'] < bomb2['roundsLeft'] and self.LineOfEffect(bomb1['x'],bomb1['y'], bomb2['x'],bomb2['y'], bomb1['explosionRange'], bomb1["roundsLeft"]):
                     bomb2['roundsLeft'] = bomb1['roundsLeft']
                     haveChaining = True
@@ -285,13 +285,13 @@ class GameState:
                 break
                 
         return
-    def ChainBombs(self):
-        return self.ChainBombsInternal(self.field,self.bombs, self.items)
+
     
 
     def PredictExplosions(self):
         self.dangerField={}
         for bomb in self.bombs:
+            print(f'****>Predicting explosions for bomb {bomb}...', file=sys.stderr)
             for x in range(bomb['x']-bomb['explosionRange'],bomb['x']+bomb['explosionRange']):
                 if x>=0 and x<self.width:
                     if self.LineOfEffect(bomb['x'],bomb['y'],x,bomb['y'],bomb['explosionRange'],  bomb["roundsLeft"]):
@@ -312,6 +312,11 @@ class GameState:
                             self.dangerField[(bomb['x'],y)].append(bomb['roundsLeft'])
                         else:
                             self.dangerField[(bomb['x'],y)]=[bomb['roundsLeft']]
+            if (bomb['x'],bomb['y']) in self.dangerField:
+                self.dangerField[(bomb['x'],bomb['y'])].append(bomb['roundsLeft'])
+                print(f'****>Adding bomb {bomb} to danger zone...', file=sys.stderr)
+            else:
+                self.dangerField[(bomb['x'],bomb['y'])]=[bomb['roundsLeft']]
         return self.dangerField
         
 
@@ -324,18 +329,21 @@ class GameState:
 
         reachableInAny = {}
         reachableInAny[0]={}
+        if fromPosition in dangerField and 0 in dangerField[fromPosition]:
+            return reachableInAny
+            
         reachableInAny[0][(fromPosition[0],fromPosition[1])]=((-1,-1))
         
         for NoOfTurns in range(1,maxDistance+1):
             reachableInAny[NoOfTurns]={}
             #by staying put for one turn..
             for tile in reachableInAny[NoOfTurns-1]: 
-                if tile not in dangerField or (NoOfTurns+1) not in dangerField[tile]:
+                if tile not in dangerField or (NoOfTurns-1) not in dangerField[tile]:
                     reachableInAny[NoOfTurns][tile]=tile
             #by moving one step froreachable in N-1
             for sourceTile in reachableInAny[NoOfTurns-1]: 
                 for targetTile in self.PassableNeighbors(sourceTile[0],sourceTile[1], NoOfTurns): #TODO update field and bombs with simulated explosions
-                    if targetTile not in reachableInAny[NoOfTurns] and (targetTile not in dangerField or (NoOfTurns+1) not in dangerField[targetTile]):
+                    if targetTile not in reachableInAny[NoOfTurns] and (targetTile not in dangerField or (NoOfTurns-1) not in dangerField[targetTile]):
                         reachableInAny[NoOfTurns][targetTile] = sourceTile   
         return reachableInAny
         
@@ -347,8 +355,13 @@ class GameState:
         path = ()
         targetList = {}      
         reachable = self.Reachable(self.current_position)
-        #print(f'->Bombing target selection...', file=sys.stderr)
-        #print(f'--> reachables for targetSelection: {reachable}', file=sys.stderr) 
+        print(f'->Bombing target selection...', file=sys.stderr)
+        for debugTile in [(8,6),(9,6)]:
+            if debugTile in self.dangerField:
+                print(f'--> dangerField for targetSelection at {debugTile}: {self.dangerField[debugTile]}', file=sys.stderr)
+            if debugTile in reachable[1]:    
+                print(f'--> reachable[1] for targetSelection at {debugTile}: {reachable[1][debugTile]}', file=sys.stderr) 
+        print(f'--> bombs for targetSelection: {self.bombs}', file=sys.stderr) 
         #print(f'--> tileField at (9,10) for targetSelection: {self.tileField[9][10]}', file=sys.stderr)
         #print(f'--> field at (10,10) for targetSelection: {self.field[10][10]}', file=sys.stderr)
 
@@ -403,11 +416,10 @@ class GameState:
 
     
     def AdvanceBombTimers(self, numberOfTurns):
-        
-        for bomb in self.bombs:
-            bomb['roundsLeft'] -= numberOfTurns
-            if bomb['roundsLeft'] < 0:
-                self.bombs.remove(bomb)
+        for bomb, item in enumerate(self.bombs):
+            self.bombs[bomb]['roundsLeft'] -= numberOfTurns
+        self.bombs = [bomb for bomb in self.bombs if bomb['roundsLeft'] >= 0]
+
 
     def AddMyBomb(self,position):
         return self.AddBomb(self.myId, position, self.my_range)
@@ -416,33 +428,27 @@ class GameState:
         self.bombs.append({'owner':owner_id,'x':position[0], 'y':position[1], 'roundsLeft':8,'explosionRange':rng})
         return
     def validateTargetForSafety(self,  x, y,numberOfTurns,  withBomb = True):
-            #print(f'VAlidating safety of  {x,y} wth Bomb: {withBomb} ....', file=sys.stderr)
             predictedState = copy.deepcopy(self)
             predictedState.AdvanceTime(numberOfTurns)
-            
-            #predictedBombs = copy.deepcopy(self.bombs)
-            #AdvanceBombTimers(predictedBombs, numberOfTurns)
+            #print(f'.... SAafety bobs after advancing time are of  {predictedState.bombs} ....', file=sys.stderr)              
             if withBomb:
-                predictedState.AddBomb(0,(x,y),self.my_range)
-                #predictedBombs.append({'owner':0,'x':x, 'y':y, 'roundsLeft':8,'explosionRange':self.my_range})
-            #predictedField = copy.deepcopy(self.field)
+                predictedState.AddBomb(self.myId,(x,y),self.my_range)
+            #print(f'.... SAafety bobs beore chaining are of  {predictedState.bombs} ....', file=sys.stderr)                
             predictedState.ChainBombs()  
-            #self.ChainBombsInternal(predictedField, predictedBombs, self.items)
-            predictedState.PredictExplosions()
-            #predictedDangerField = self.PredictExplosionsInternal(predictedField, predictedBombs, self.items)
-            #predictedReachables = self.ReachableInternal(predictedField, predictedDangerField, predictedBombs, (x, y))
-            predictedReachables = predictedState.Reachable((x,y))
-            #print(f'.... SAafety bobs are of  {predictedBombs} ....', file=sys.stderr)
-            #print(f'.... SAafety dangerField are of  {predictedDangerField[(4,8)]}... {predictedDangerField[(4,9)]} ....', file=sys.stderr)
 
+            predictedState.PredictExplosions()
+            predictedReachables = predictedState.Reachable((x,y))
+            #print(f'.... SAafety bobs are of  {predictedState.bombs} ....', file=sys.stderr)
+            print(f'.... SAafety dangerField are of  {predictedState.dangerField}... ',file=sys.stderr)
+            print(f'.... SAafety reachables[0] are of  {predictedReachables[0]}... ',file=sys.stderr)
+            if len(predictedReachables) > 1:
+                print(f'.... SAafety reachables[1] are of  {predictedReachables[1]}... ',file=sys.stderr)            
+            print(f'.... Size of reachables are of  {len(predictedReachables)}... ',file=sys.stderr)
             
             if predictedReachables:
-                #escapeMoves = #[tile for tile in predictedReachables[maxTargetDistance].keys()]# """if tile not in predictedDangerField.keys()"""]
-                if predictedReachables[maxTargetDistance]:
-                    #if (x,y)==(4,9):
-                    #    print(f'.... SAafety reachables are of  {predictedReachables} ....', file=sys.stderr)
+               if maxTargetDistance in predictedReachables and predictedReachables[maxTargetDistance]:
                     return True
-                else:
+               else:
     
                     return False    
             return false
@@ -525,7 +531,7 @@ while True:
 
     if (gameState.current_position == bomb_target) and (gameState.my_bombs >0): #Simulate the state after one turn if we put bomb here and see if there is a target or ate least an escape
         predictedState = copy.deepcopy(gameState)
-        predictedState.AdvanceTime(1) 
+        predictedState.AdvanceTime(1) #does nothing yet, but in theory we need to advance/process bomb timers
         predictedState.AddMyBomb(gameState.current_position)
         predictedState.ChainBombs()
         predictedState.PredictExplosions()
