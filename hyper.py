@@ -525,7 +525,7 @@ while True:
 
     if (gameState.current_position == bomb_target) and (gameState.my_bombs >0): #Simulate the state after one turn if we put bomb here and see if there is a target or ate least an escape
         predictedState = copy.deepcopy(gameState)
-        predictedState.AdvanceTime(1) #does nothing yet, but in theory we need to advance/process bomb timers
+        predictedState.AdvanceTime(1) 
         predictedState.AddMyBomb(gameState.current_position)
         predictedState.ChainBombs()
         predictedState.PredictExplosions()
