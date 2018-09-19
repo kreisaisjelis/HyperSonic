@@ -1,0 +1,22 @@
+hyper.py:497: DeprecationWarning: time.clock has been deprecated in Python 3.3 and will be removed from Python 3.8: use time.perf_counter or time.process_time instead
+  startTime = time.clock()
+Globals.width 13
+->Top 5 high value targets. [(((1, 1), 0), {'path': [(1, 1)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': True, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': False, 'trapOnPath': -2}), (((1, 1), 1), {'path': [(1, 1), (1, 1)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': False, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': False, 'trapOnPath': -2}), (((0, 1), 1), {'path': [(1, 1), (0, 1)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': False, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': False, 'trapOnPath': -2})]
+!!--->Targeting took 23.44226837158203 miliseconds
+Position (1, 1), bomb condition: True
+Bomb Target: (1, 1)
+Escape Target: (-1, -1)
+Message: 
+->Top 5 high value targets. [(((0, 1), 1), {'path': [(1, 1), (0, 1)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': True, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': True, 'trapOnPath': -2}), (((1, 0), 1), {'path': [(1, 1), (1, 0)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': False, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': True, 'trapOnPath': -2}), (((1, 2), 1), {'path': [(1, 1), (1, 2)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': False, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': True, 'trapOnPath': -2})]
+!!--->Targeting took 22.130966186523438 miliseconds
+Bombing Bomb
+hyper.py:574: DeprecationWarning: time.clock has been deprecated in Python 3.3 and will be removed from Python 3.8: use time.perf_counter or time.process_time instead
+  endTime = time.clock()
+Turn took 51.187 miliseconds
+Globals.width 13
+Traceback (most recent call last):
+  File "hyper.py", line 502, in <module>
+    gameState.ReadField()
+  File "hyper.py", line 253, in ReadField
+    self.field.append(list(input()))
+EOFError: EOF when reading a line
