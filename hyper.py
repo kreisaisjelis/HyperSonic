@@ -475,6 +475,7 @@ class GlobalState:
         myId = 0
     def LoadGlobals(self):
         self.width, self.height, self.myId = [int(i) for i in input().split()]
+        return self
 # body starts here################################################################################################
 if __name__ == "__main__":
     globals = GlobalState()
@@ -496,14 +497,9 @@ if __name__ == "__main__":
     
         startTime = time.clock()
     
-        gameState = GameState(globals)
-        print(f'Globals.width {globals.width}', file=sys.stderr)
-    
+        gameState = GameState(globals) 
         gameState.ReadField()
-      
         gameState.ReadEntities()
-    
-       
         gameState.ChainBombs()
         
         #myMoves = PossiblePlayerMoves(gameState.players[gameState.myId],gameState)
