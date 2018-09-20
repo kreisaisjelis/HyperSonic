@@ -3,18 +3,21 @@ from hyper import GlobalState
 import sys
 import filecmp
 import os
+import copy
 from os.path import isfile, join
 
 dirName = 'unitTest/'
 tests = set([f.split('.')[0] for f in os.listdir(dirName) if isfile(join(dirName, f))])
 
-print(tests)
+#print(tests)
 
 for testName in tests:
+	print(f'Running test "{testName}"...')
 	inputFName = dirName + testName + '.in'
 	outputFName = dirName +  testName + '.out'
 	expectedResultFName = dirName +  testName + '.exp'
 	commandFName = dirName +  testName + '.com'
+
 
 	with open(outputFName, 'w+') as fOut, open(inputFName) as fIn, open(expectedResultFName) as fExp, open(commandFName) as fCom:
 		sys.stderr = fOut
@@ -25,9 +28,9 @@ for testName in tests:
 
 	with open(outputFName) as fOut, open(expectedResultFName) as fExp:
 		if fOut.read() == fExp.read():
-			print(f'Test "{testName}" passed')
+			print(f'... passed')
 			fOut.close()
 			os.remove(outputFName)
 		else:
-			print(f'Test "{testName}" FAILED!')
+			print(f'... FAILED!')
 
