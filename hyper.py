@@ -394,7 +394,7 @@ class GameState:
         #    print(f'->Target List {targetList}', file=sys.stderr)
         
         targetingEndTime = time.time()
-        print(f'!!--->Targeting took {(targetingEndTime-targetingStartTime)*1000} miliseconds', file=sys.stderr)
+        #print(f'!!--->Targeting took {(targetingEndTime-targetingStartTime)*1000} miliseconds', file=sys.stderr) #this line has a problem of breaking unit test output compare
         return bestTarget, nextMove  
         
     def AdvanceTime(self, NrOfTurns): #TODO

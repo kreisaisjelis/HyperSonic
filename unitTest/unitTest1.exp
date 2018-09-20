@@ -1,5 +1,4 @@
 ->Top 5 high value targets. [(((1, 1), 0), {'path': [(1, 1)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': True, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': False, 'trapOnPath': -2}), (((1, 1), 1), {'path': [(1, 1), (1, 1)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': False, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': False, 'trapOnPath': -2}), (((1, 1), 2), {'path': [(1, 1), (1, 1), (1, 1)], 'bombingValue': 0, 'pathValue': 0, 'totalValue': 0.0, 'canEscapeAfterBombing': False, 'canEscapeButNoBombing': False, 'isEndpointInDangerField': False, 'trapOnPath': -2})]
-!!--->Targeting took 0.9965896606445312 miliseconds
 Reachables {0: {(1, 1): (-1, -1)}, 1: {(1, 1): (1, 1)}, 2: {(1, 1): (1, 1), (0, 1): (1, 1), (1, 0): (1, 1)}, 3: {(1, 1): (1, 1), (0, 1): (0, 1), (1, 0): (1, 0), (0, 0): (0, 1)}}
 Bombs [{'owner': 0, 'x': 0, 'y': 0, 'roundsLeft': 2, 'explosionRange': 3}]
 Danger field {(0, 0): [2, 2], (1, 0): [2], (2, 0): [2], (0, 1): [2], (0, 2): [2]}
