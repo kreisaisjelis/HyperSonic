@@ -12,6 +12,8 @@ valueOfRangeItem = 1          #known optimum [0.3-1]
 valueOfBombItem = 2             #knonw optimum [2]
 powerOfDistance =0.5     #known optimums [0.3, 0.5, 0.7]
 coefficientOfDiminishingForPotentialItems = 1  #known optimums [0.5-1]
+## debug controls
+printGameState = False
 
 #control constants end#####################################################################################################
       
@@ -250,7 +252,10 @@ class GameState:
  
     def ReadField(self):
         for row in range(self.height):
-            self.field.append(list(input()))
+            fieldRow = input()
+            if printGameState:
+                print(fieldRow, file=sys.stderr)
+            self.field.append(list(fieldRow))
         for x in range(self.width):
             self.tileField.append([])
             for y in range(self.height):
@@ -259,9 +264,14 @@ class GameState:
         
     def ReadEntities(self):
         entities = int(input())  
-
+        if printGameState:
+            print(entities, file=sys.stderr)
         for i in range(entities):
-            entity_type, owner, x, y, param_1, param_2 = [int(j) for j in input().split()]
+
+            entityRow = input()
+            if printGameState:
+                print(entityRow, file=sys.stderr)
+            entity_type, owner, x, y, param_1, param_2 = [int(j) for j in entityRow.split()]
             if entity_type ==0:
                 self.players[owner] = {'id':owner, 'x':x, 'y':y, 'bombsAvailable':param_1, 'bombRange':param_2}
             if entity_type ==1:
@@ -272,11 +282,11 @@ class GameState:
         self.my_bombs = self.players[self.myId]['bombsAvailable']
         self.my_range = self.players[self.myId]['bombRange']
         
-    def ChainBombsInternal(self,field, bombs, items):
+    def ChainBombs(self):
         while True:
-            bombs.sort(key=lambda bomb: bomb['roundsLeft']) # we need this sorted for more efficient chain explosion processing later
+            self.bombs.sort(key=lambda bomb: bomb['roundsLeft']) # we need this sorted for more efficient chain explosion processing later
             haveChaining = False
-            for (bomb1, bomb2) in itertools.combinations(bombs, 2):
+            for (bomb1, bomb2) in itertools.combinations(self.bombs, 2):
                 if bomb1['roundsLeft'] < bomb2['roundsLeft'] and self.LineOfEffect(bomb1['x'],bomb1['y'], bomb2['x'],bomb2['y'], bomb1['explosionRange'], bomb1["roundsLeft"]):
                     bomb2['roundsLeft'] = bomb1['roundsLeft']
                     haveChaining = True
@@ -284,8 +294,6 @@ class GameState:
                 break
                 
         return
-    def ChainBombs(self):
-        return self.ChainBombsInternal(self.field,self.bombs, self.items)
     
 
     def PredictExplosions(self):
@@ -325,6 +333,9 @@ class GameState:
         reachableInAny[0]={}
         reachableInAny[0][(fromPosition[0],fromPosition[1])]=((-1,-1))
         
+        if fromPosition in dangerField and 0 in dangerField[fromPosition]:
+            return reachableInAny
+
         for NoOfTurns in range(1,maxDistance+1):
             reachableInAny[NoOfTurns]={}
             #by staying put for one turn..
@@ -419,25 +430,22 @@ class GameState:
             predictedState = copy.deepcopy(self)
             predictedState.AdvanceTime(numberOfTurns)
             
-            #predictedBombs = copy.deepcopy(self.bombs)
-            #AdvanceBombTimers(predictedBombs, numberOfTurns)
+
             if withBomb:
                 predictedState.AddBomb(0,(x,y),self.my_range)
-                #predictedBombs.append({'owner':0,'x':x, 'y':y, 'roundsLeft':8,'explosionRange':self.my_range})
-            #predictedField = copy.deepcopy(self.field)
+
             predictedState.ChainBombs()  
-            #self.ChainBombsInternal(predictedField, predictedBombs, self.items)
             predictedState.PredictExplosions()
-            #predictedDangerField = self.PredictExplosionsInternal(predictedField, predictedBombs, self.items)
-            #predictedReachables = self.ReachableInternal(predictedField, predictedDangerField, predictedBombs, (x, y))
+
             predictedReachables = predictedState.Reachable((x,y))
-            #print(f'.... SAafety bobs are of  {predictedBombs} ....', file=sys.stderr)
-            #print(f'.... SAafety dangerField are of  {predictedDangerField[(4,8)]}... {predictedDangerField[(4,9)]} ....', file=sys.stderr)
+            #print(f'.... SAafety bombs are of  {predictedState.bombs} ....', file=sys.stderr)
+            #print(f'.... SAafety danger field are of  {predictedState.dangerField} ....', file=sys.stderr)
+            #print(f'.... reachables within validation prediction  {predictedReachables} ....', file=sys.stderr)
 
             
             if predictedReachables:
                 #escapeMoves = #[tile for tile in predictedReachables[maxTargetDistance].keys()]# """if tile not in predictedDangerField.keys()"""]
-                if predictedReachables[maxTargetDistance]:
+                if len(predictedReachables) >maxTargetDistance and predictedReachables[maxTargetDistance]:
                     #if (x,y)==(4,9):
                     #    print(f'.... SAafety reachables are of  {predictedReachables} ....', file=sys.stderr)
                     return True
