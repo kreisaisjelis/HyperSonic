@@ -7,9 +7,11 @@ import copy
 from os.path import isfile, join
 
 dirName = 'unitTest/'
-tests = set([f.split('.')[0] for f in os.listdir(dirName) if isfile(join(dirName, f))])
+tests = sorted(set([f.split('.')[0] for f in os.listdir(dirName) if isfile(join(dirName, f))]))
 
 #print(tests)
+testNo = len(tests)
+failed = 0
 
 for testName in tests:
 	print(f'Running test "{testName}"...')
@@ -33,4 +35,7 @@ for testName in tests:
 			os.remove(outputFName)
 		else:
 			print(f'... FAILED!')
+			failed += 1
+
+print(f'{failed} of {testNo} failed')
 

@@ -7,14 +7,14 @@ import time
 from enum import Enum
 
 #control constnts#####################################################################################################
-maxTargetDistance = 9      #known optimum range [8;11]
+maxTargetDistance = 8      #known optimum range [8;11]
 valueOfRangeItem = 1          #known optimum [0.3-1]
 valueOfBombItem = 2             #knonw optimum [2]
-powerOfDistance =0.5     #known optimums [0.3, 0.5, 0.7]
+powerOfDistance =1     #known optimums [0.3, 0.5, 0.7]
 coefficientOfDiminishingForPotentialItems = 1  #known optimums [0.5-1]
 ## debug controls
-printGameState = False
-
+printGameState = True
+debugTurn = -1
 #control constants end#####################################################################################################
       
 class TileType(Enum):
@@ -91,8 +91,10 @@ class AllPossibleMoves:
     
 
 
-def SimulateTrapsInOneMove(gameState, myNewPosition):
+def SimulateTrapsInOneMove(gameState, myNewPosition, doIBombBeforeMove):
     predictedState = copy.deepcopy(gameState)
+    if doIBombBeforeMove:
+        predictedState.AddMyBomb(gameState.current_position)
     predictedState.players[predictedState.myId]["x"]=myNewPosition[0] #This duplication is not cool
     predictedState.players[predictedState.myId]["y"]=myNewPosition[1]
     predictedState.current_position = myNewPosition
@@ -100,11 +102,13 @@ def SimulateTrapsInOneMove(gameState, myNewPosition):
     for player in predictedState.players:
         if predictedState.players[player]["bombsAvailable"]>0 and player != gameState.myId:
             predictedState.bombs.append({'owner':player,'x':predictedState.players[player]["x"], 'y':predictedState.players[player]["y"], 'roundsLeft':8,'explosionRange':predictedState.players[player]["bombRange"]})
+    predictedState.AdvanceTime(1)
     predictedState.ChainBombs()
     predictedState.PredictExplosions()
     #print(f'-> Trap simulation done, about to detect traps...', file=sys.stderr)
     return predictedState.DetectTrap()
     #return 0
+    
     
 class GameState:
     
@@ -238,15 +242,15 @@ class GameState:
         for tile in path:
             if tile in self.items:
                 if self.items[tile] == 2:
-                    val +=valueOfBombItem
+                    val +=valueOfBombItem / (self.my_bombs+1)
                 else:
-                    val += valueOfRangeItem
+                    val += valueOfRangeItem / self.my_range
         return val
         
     def EvaluateTarget(self, bombValue, pathLength, itemValue, myBombsLeft):  
         #if (bombValue > 0.5):
         #    print(f'->BombValue {bombValue}, pathLength {pathLength}, itemValue {itemValue}, mybombs left {myBombsLeft}', file=sys.stderr)
-        return (bombValue+ itemValue/(myBombsLeft+1))/pow(pathLength,powerOfDistance)
+        return (bombValue+ itemValue/(myBombsLeft+1))/pow(pathLength,powerOfDistance/(self.my_bombs+1))
 
 
  
@@ -263,12 +267,14 @@ class GameState:
 
         
     def ReadEntities(self):
+        entityStartTime = time.time()
         entities = int(input())  
         if printGameState:
             print(entities, file=sys.stderr)
         for i in range(entities):
-
+            #print(f'%%%>Reading entity nr {i} ...', file=sys.stderr)
             entityRow = input()
+            #print(f'%%%>Raw  entity row {entityRow}...', file=sys.stderr)
             if printGameState:
                 print(entityRow, file=sys.stderr)
             entity_type, owner, x, y, param_1, param_2 = [int(j) for j in entityRow.split()]
@@ -324,28 +330,24 @@ class GameState:
 
         
     def Reachable(self, fromPosition, maxDistance = maxTargetDistance):
-        return self.ReachableInternal(self.field, self.dangerField, self.bombs, fromPosition, maxDistance)
-
-  
-    def ReachableInternal(self, field, dangerField, bombs, fromPosition, maxDistance = maxTargetDistance):
 
         reachableInAny = {}
         reachableInAny[0]={}
         reachableInAny[0][(fromPosition[0],fromPosition[1])]=((-1,-1))
         
-        if fromPosition in dangerField and 0 in dangerField[fromPosition]:
+        if fromPosition in self.dangerField and 0 in self.dangerField[fromPosition]:
             return reachableInAny
 
         for NoOfTurns in range(1,maxDistance+1):
             reachableInAny[NoOfTurns]={}
             #by staying put for one turn..
             for tile in reachableInAny[NoOfTurns-1]: 
-                if tile not in dangerField or (NoOfTurns+1) not in dangerField[tile]:
+                if tile not in self.dangerField or (NoOfTurns+1) not in self.dangerField[tile]:
                     reachableInAny[NoOfTurns][tile]=tile
             #by moving one step froreachable in N-1
             for sourceTile in reachableInAny[NoOfTurns-1]: 
                 for targetTile in self.PassableNeighbors(sourceTile[0],sourceTile[1], NoOfTurns): #TODO update field and bombs with simulated explosions
-                    if targetTile not in reachableInAny[NoOfTurns] and (targetTile not in dangerField or (NoOfTurns+1) not in dangerField[targetTile]):
+                    if targetTile not in reachableInAny[NoOfTurns] and (targetTile not in self.dangerField or (NoOfTurns+1) not in self.dangerField[targetTile]):
                         reachableInAny[NoOfTurns][targetTile] = sourceTile   
         return reachableInAny
         
@@ -355,9 +357,12 @@ class GameState:
 
         nextMove = self.current_position #we default to current position, assuming that not moving is safer, if no good moves are available
         path = ()
-        targetList = {}      
+        targetList = {}
+        shorterTargetList = {}
         reachable = self.Reachable(self.current_position)
         #print(f'->Bombing target selection...', file=sys.stderr)
+        #print(f'--> bombs for targetSelection: {self.bombs}', file=sys.stderr) 
+        #print(f'--> dangerField for targetSelection: {self.dangerField}', file=sys.stderr)         
         #print(f'--> reachables for targetSelection: {reachable}', file=sys.stderr) 
         #print(f'--> tileField at (9,10) for targetSelection: {self.tileField[9][10]}', file=sys.stderr)
         #print(f'--> field at (10,10) for targetSelection: {self.field[10][10]}', file=sys.stderr)
@@ -366,43 +371,56 @@ class GameState:
             if reachable[pathLength]:
                 for tile in reachable[pathLength]:
                     path = self.GetPathFromReachables(reachable, tile, pathLength)
-                    targetList[(tile,pathLength)] = {'path': path, 'bombingValue':-1,'pathValue':-1,'totalValue':-1, 'canEscapeAfterBombing':False, 'canEscapeButNoBombing':False, 'isEndpointInDangerField':(tile in self.dangerField), 'trapOnPath':-2}
-                    if ((self.my_bombs >0) and (withBomb)) or not targetList[(tile,pathLength)]['isEndpointInDangerField']: #(not tile in self.dangerField): #TODO - stil not good
+                    #targetList[(tile,pathLength)] = {'path': path, 'bombingValue':-1,'pathValue':-1,'totalValue':-1, 'canEscapeAfterBombing':False, 'canEscapeButNoBombing':False, 'isEndpointInDangerField':(tile in self.dangerField), 'trapOnPath':-2}
+                    if tile not in shorterTargetList:
+                        shorterTargetList[tile] = {'path': path, 'bombingValue':-1,'pathValue':-1,'totalValue':-1, 'canEscapeAfterBombing':False, 'canEscapeButNoBombing':False, 'isEndpointInDangerField':(tile in self.dangerField), 'trapOnPath':-2}
+                    if ((self.my_bombs >0) and (withBomb)) or not shorterTargetList[tile]['isEndpointInDangerField']: #(not tile in self.dangerField): #TODO - stil not good
                     #if (not tile in dangerField):
-                        targetList[(tile,pathLength)]['bombingValue'] = self.EvaluateBombingTarget(tile[0], tile[1], self.my_range, self.my_bombs)
-                        targetList[(tile,pathLength)]['pathValue'] = self.ItemValueOfPath(path)
-                        targetList[(tile,pathLength)]['totalValue'] = self.EvaluateTarget(targetList[(tile,pathLength)]['bombingValue'],len(path),targetList[(tile,pathLength)]['pathValue'] ,self.my_bombs)
-                        newVal = targetList[(tile,pathLength)]['totalValue']
-                        #if (tile == (10,0)) or (tile == (12,1)):
-                        #    print(f'->Value of {tile} is {newVal}', file=sys.stderr)
-                        #    print(f'->SAafety for {tile} is {self.validateTargetForSafety(tile[0],tile[1], len(path)-1, withBomb = withBomb)}', file=sys.stderr)
+                        shorterTargetList[tile]['bombingValue'] = self.EvaluateBombingTarget(tile[0], tile[1], self.my_range, self.my_bombs)
+                        shorterTargetList[tile]['pathValue'] = self.ItemValueOfPath(path)
+                        shorterTargetList[tile]['totalValue'] = self.EvaluateTarget(shorterTargetList[tile]['bombingValue'],len(path),shorterTargetList[tile]['pathValue'] ,self.my_bombs)
 
                 #print(f'->Bombing path of length {pathLength} to target selected. Target {bestTarget}, path: {bestPath}', file=sys.stderr) 
         
         #sortedTargetList = sorted((value['totalValue'], key) for (key,value) in targetList.items())
-        sortedTargetList = sorted(targetList.items(), key=lambda x: x[1]['totalValue'], reverse=True)
+        sortedTargetList = sorted(shorterTargetList.items(), key=lambda x: x[1]['totalValue'], reverse=True)
         bestTarget= (-1,-1)
         bestPath = ((-1,-1))
+        knownTraps = set()
+        knownSafes = set()
         
-        for ((tile, dist),targetAttr) in sortedTargetList:
+        for (tile,targetAttr) in sortedTargetList:
             targetAttr['canEscapeAfterBombing']  = self.validateTargetForSafety(tile[0],tile[1], len(targetAttr['path'])-1, withBomb = withBomb)
+
             if targetAttr['canEscapeAfterBombing']:
+                if len(targetAttr['path'])>1:
+                    nextMove = targetAttr['path'][1]
+                    willBombInNextMove = False
+                else:
+                    nextMove = targetAttr['path'][0] #TODO this is not 100% correct
+                    willBombInNextMove = True
+                if nextMove in knownTraps:
+                    targetAttr['trapOnPath'] = -1
+                elif nextMove in knownSafes:
+                    targetAttr['trapOnPath'] = 0
+                else:
+                    targetAttr['trapOnPath'] = SimulateTrapsInOneMove(self, nextMove, willBombInNextMove)
+                    if targetAttr['trapOnPath'] == -1:
+                        knownTraps.add(nextMove)
+                    else:
+                        knownSafes.add(nextMove)
                 #targetAttr['trapOnPath'] = (SimulateTrapsInOneMove(self,targetAttr['path'][1]) if len(targetAttr['path'])>1 else 0)
                 #if targetAttr['trapOnPath'] >=0:
-                bestTarget = tile
-                bestPath = targetAttr['path']
-                break
-        print(f'->Top 5 high value targets. {sortedTargetList[:3]}', file=sys.stderr) 
+                if targetAttr['trapOnPath'] != -1:
+                    bestTarget = tile
+                    bestPath = targetAttr['path']
+                    break
+        #print(f'->Top 5 high value targets. {sortedTargetList[:3]}', file=sys.stderr) 
 
         if len(bestPath)>1:
             nextMove = bestPath[1]
         else:
             nextMove = self.current_position
-        #print(f'->Safety of () in {len(bestPath)-1} turns {self.validateTargetForSafety(bestTarget[0],bestTarget[1], len(bestPath)-1, withBomb)} with bomb: {withBomb}', file=sys.stderr) 
-        #print(f'->Safety of {bestTarget} in {len(bestPath)-1} turns {self.validateTargetForSafety(bestTarget[0],bestTarget[1], len(bestPath)-1, withBomb)} with bomb: {withBomb}', file=sys.stderr) 
-        #print(f'->Bombing target selected. {bestTarget}, next move {nextMove}, path {bestPath}', file=sys.stderr)  
-        #if bestTarget != (-1,-1):
-        #    print(f'->Target List {targetList}', file=sys.stderr)
         
         targetingEndTime = time.time()
         #print(f'!!--->Targeting took {(targetingEndTime-targetingStartTime)*1000} miliseconds', file=sys.stderr) #this line has a problem of breaking unit test output compare
@@ -471,7 +489,7 @@ class GameState:
         #print(f'Detect trap reachables, len reachables: {reachables}, {len(reachables)}', file=sys.stderr)
         #return (len(reachables)<1) or (len(reachables)==1 and list(reachables)[0] in dangerField)
         #maxTargetDistance
-        return len(reachables[maxTargetDistance])<1
+        return len(reachables)>maxTargetDistance and len(reachables[maxTargetDistance])<1
     
 class GlobalState:
     width = 0
@@ -495,6 +513,7 @@ if __name__ == "__main__":
     bomb_target = (-1,-1)
     escape_target = (-1,-1)
     next_move = (-1,-1)
+    currentTurn = 0
     
     message= ""
     
@@ -503,11 +522,21 @@ if __name__ == "__main__":
     # game loop
     while True:
     
-        startTime = time.clock()
-    
+        
+        currentTurn +=1
+        print(f'Starting Turn: {currentTurn}', file=sys.stderr)
+        readStartTime = time.process_time()
+        
         gameState = GameState(globals) 
         gameState.ReadField()
         gameState.ReadEntities()
+        
+        aiStartTime = time.process_time()
+        print(f'Reading inputs took {(aiStartTime-readStartTime)*1000} miliseconds', file=sys.stderr) 
+        
+        if currentTurn == debugTurn:
+            print(f'MOVE {gameState.current_position[0]} {gameState.current_position[1]} "Skipping turn {currentTurn}"') 
+            continue
         gameState.ChainBombs()
         
         #myMoves = PossiblePlayerMoves(gameState.players[gameState.myId],gameState)
@@ -534,17 +563,17 @@ if __name__ == "__main__":
         print(f'Bomb Target: {bomb_target}', file=sys.stderr)
         print(f'Escape Target: {escape_target}', file=sys.stderr)
         print(f'Message: {message}', file=sys.stderr)
-    
         
-        #print(f'TargetSafety: at {bomb_target}{validateTargetForSafety(field, bombs,bomb_target[0], bomb_target[1], my_range, 1)}', file=sys.stderr)
+                #print(f'TargetSafety: at {bomb_target}{validateTargetForSafety(field, bombs,bomb_target[0], bomb_target[1], my_range, 1)}', file=sys.stderr)
     
         if (gameState.current_position == bomb_target) and (gameState.my_bombs >0): #Simulate the state after one turn if we put bomb here and see if there is a target or ate least an escape
             predictedState = copy.deepcopy(gameState)
-            predictedState.AdvanceTime(1) 
+            predictedState.AdvanceTime(0) 
             predictedState.AddMyBomb(gameState.current_position)
             predictedState.ChainBombs()
             predictedState.PredictExplosions()
             bomb_target,next_move = predictedState.GetNewTarget(True)
+           
             if bomb_target ==(-1,-1):
                 escape_target,next_move = predictedState.GetNewTarget(False)
                 if escape_target ==(-1,-1): #if we are here, means that if we place bomb at this position, we can not escape. 
@@ -575,5 +604,5 @@ if __name__ == "__main__":
                 print(f'Bombing Move', file=sys.stderr)
             
         last_position = gameState.current_position
-        endTime = time.clock()
-        print(f'Turn took {(endTime-startTime)*1000} miliseconds', file=sys.stderr)
+        endTime = time.process_time()
+        print(f'Turn took {(endTime-aiStartTime)*1000} miliseconds', file=sys.stderr)
