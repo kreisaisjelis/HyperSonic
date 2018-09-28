@@ -3,7 +3,7 @@ gameState.ReadField()
 gameState.ReadEntities()
 gameState.ChainBombs()
 gameState.PredictExplosions()
-bomb_target,next_move = gameState.GetNewTarget(True)
+bomb_target,next_move, some = gameState.GetNewTarget(True)
 
 print(f'Reachables {gameState.Reachable((0,0),10)}', file=sys.stderr)
 print(f'Bombs {gameState.bombs}', file=sys.stderr)

@@ -10,10 +10,10 @@ from enum import Enum
 maxTargetDistance = 8      #known optimum range [8;11]
 valueOfRangeItem = 1          #known optimum [0.3-1]
 valueOfBombItem = 2             #knonw optimum [2]
-powerOfDistance =1     #known optimums [0.3, 0.5, 0.7]
+powerOfDistance =1    #known optimums [0.3, 0.5, 0.7]
 coefficientOfDiminishingForPotentialItems = 1  #known optimums [0.5-1]
 ## debug controls
-printGameState = True
+printGameState = False
 debugTurn = -1
 #control constants end#####################################################################################################
       
@@ -146,7 +146,8 @@ class GameState:
     def TileHasItem(self, x,y):
         return (x,y) in self.items
 
-    def TileHasBomb(self, x,y,bombs, afterNTurns = 0):
+    def TileHasBomb(self, location,afterNTurns = 0):
+        (x,y) = location 
         return [bomb for bomb in self.bombs if (bomb['x']==x and bomb['y']==y and bomb["roundsLeft"]>=afterNTurns)]
        
     def TileHasBox(self, x,y, afterNTurns =0):
@@ -159,15 +160,13 @@ class GameState:
     def TileIsPassable(self, x,y, afterNTurns =0):
         
         str = self.field[y][x]
-        res = not self.TileHasBox(x,y,afterNTurns) and not self.TileHasWall(str) and not self.TileHasBomb(x,y, afterNTurns)
+        res = not self.TileHasBox(x,y,afterNTurns) and not self.TileHasWall(str) and not self.TileHasBomb((x,y), afterNTurns)
         return res
         
     def TileIsExplosionPassable(self, x,y, afterNTurns =0):
         return (self.TileIsPassable( x,y, afterNTurns))# and not TileHasItem(x,y,items)) #TODO if tile has items after N turns
         
-        
-    def TileHasBomb(self, x,y, afterNTurns = 0):
-        return [bomb for bomb in self.bombs if (bomb['x']==x and bomb['y']==y and bomb["roundsLeft"]>=afterNTurns)]
+
     
     def NeighborsOfTile(self,x,y):
         res = []
@@ -223,10 +222,6 @@ class GameState:
         #pathLength = 0
         if target == (-1,-1):
             return [(-1,-1),(-1,-1)]
-        #if (not reachables):
-        #    return path
-        #print(f'We trying to get path to {target} in  {reachables}', file=sys.stderr)
-        #print(f'.Found {target} at pathLength {pathLength}', file=sys.stderr)
         step = target
         for stepNumber in range(pathLength,-1,-1):
     
@@ -416,15 +411,35 @@ class GameState:
                     bestPath = targetAttr['path']
                     break
         #print(f'->Top 5 high value targets. {sortedTargetList[:3]}', file=sys.stderr) 
-
+        
+        
         if len(bestPath)>1:
             nextMove = bestPath[1]
         else:
             nextMove = self.current_position
         
+        
         targetingEndTime = time.time()
         #print(f'!!--->Targeting took {(targetingEndTime-targetingStartTime)*1000} miliseconds', file=sys.stderr) #this line has a problem of breaking unit test output compare
-        return bestTarget, nextMove  
+        return bestTarget, nextMove, self.IsTargetSafeWithExtraBomb(bestPath,self.current_position)
+
+    def IsTargetSafeWithExtraBomb(self, targetPath, newBombLocation):
+        if self.TileHasBomb(newBombLocation):
+            return True
+        predictedState = copy.deepcopy(self)
+        predictedState.AddBomb(0,newBombLocation,self.my_range)
+        predictedState.ChainBombs()  
+        predictedState.PredictExplosions()        
+        return predictedState.IsPathSafe(targetPath)
+        
+    def IsPathSafe(self, path):
+        result= True
+        for step in range(len(path)):
+            tile = path[step]
+            if tile in self.dangerField and (step+1) in self.dangerField[tile]:
+                result = False
+                break
+        return result
         
     def AdvanceTime(self, NrOfTurns): #TODO
         self.AdvanceBombTimers(NrOfTurns)
@@ -514,6 +529,7 @@ if __name__ == "__main__":
     escape_target = (-1,-1)
     next_move = (-1,-1)
     currentTurn = 0
+    canIBombNow = False
     
     message= ""
     
@@ -539,6 +555,7 @@ if __name__ == "__main__":
             continue
         gameState.ChainBombs()
         
+
         #myMoves = PossiblePlayerMoves(gameState.players[gameState.myId],gameState)
         #allMoves = AllPossibleMoves(gameState.players,gameState.field,gameState.bombs)
         #print(f'My possible moves: {myMoves}', file=sys.stderr)
@@ -554,10 +571,10 @@ if __name__ == "__main__":
         if isTrap == -1:
             message = "Its a TRAP!" 
      
-        bomb_target,next_move = gameState.GetNewTarget(True)
+        bomb_target,next_move,canIBombNow = gameState.GetNewTarget(True)
         
         if bomb_target ==(-1,-1):
-            escape_target,next_move = gameState.GetNewTarget(False)
+            escape_target,next_move,canIBombNow  = gameState.GetNewTarget(False)
     
         print(f'Position {gameState.current_position}, bomb condition: {gameState.current_position == bomb_target}', file=sys.stderr)
         print(f'Bomb Target: {bomb_target}', file=sys.stderr)
@@ -571,13 +588,13 @@ if __name__ == "__main__":
             predictedState.AdvanceTime(0) 
             predictedState.AddMyBomb(gameState.current_position)
             predictedState.ChainBombs()
-            predictedState.PredictExplosions()
-            bomb_target,next_move = predictedState.GetNewTarget(True)
+            predictedState.PredictExplosions() 
+            bomb_target,next_move,canIBombNow  = predictedState.GetNewTarget(True)
            
             if bomb_target ==(-1,-1):
-                escape_target,next_move = predictedState.GetNewTarget(False)
+                escape_target,next_move,canIBombNow  = predictedState.GetNewTarget(False)
                 if escape_target ==(-1,-1): #if we are here, means that if we place bomb at this position, we can not escape. 
-                    escape_target,next_move = gameState.GetNewTarget(False) #maybe we can escape if we do not place bomb here?
+                    escape_target,next_move,canIBombNow  = gameState.GetNewTarget(False) #maybe we can escape if we do not place bomb here?
                     if escape_target ==(-1,-1):
                         print(f'MOVE {gameState.current_position[0]} {gameState.current_position[1]} {message}')
                         print(f'Strike that order, hold position!', file=sys.stderr)
@@ -600,7 +617,10 @@ if __name__ == "__main__":
                     print(f'Escape move', file=sys.stderr)
                     
             else:
-                print(f'MOVE {next_move[0]} {next_move[1]} {message}')   
+                action = 'MOVE'
+                if canIBombNow:
+                    action = 'BOMB'
+                print(f'{action} {next_move[0]} {next_move[1]} {message}')   
                 print(f'Bombing Move', file=sys.stderr)
             
         last_position = gameState.current_position
